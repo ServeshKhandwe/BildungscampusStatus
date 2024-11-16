@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microclimate Heatmap</title>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+    mapboxgl.accessToken = 'pk.eyJ1Ijoic2VydmVzaCIsImEiOiJjbTNqNjhycW0wMDZtMmpxeWd5NTl1ZGM3In0.fe-FTQwRqeYVavtxvIedXA';
+    const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/satellite-streets-v11', // Use the satellite style
+        center: [9.22196, 49.142692], // Centered at Heilbronn
+        zoom: 12
+    });
+
+    // Filter out extreme values
+    const sensorData = [
+        { coordinates: [9.2172614, 49.1491586], temperature: 6.8, humidity: 79.7 },
+        { coordinates: [9.2153011, 49.1483263], temperature: 6.9, humidity: 80.7 },
+        { coordinates: [9.2155099, 49.1479037], temperature: 6.9, humidity: 79.4 },
+        { coordinates: [9.2164279, 49.1487294], temperature: 6.9, humidity: 83.2 },
+        { coordinates: [9.2170452, 49.1473278], temperature: 6.5, humidity: 86 },
+        { coordinates: [9.2174887, 49.1475127], temperature: 6.6, humidity: 83.1 },
+        { coordinates: [9.2179923, 49.1468942], temperature: 7.1, humidity: 79.3 },
+        { coordinates: [9.2167959, 49.1492921], temperature: 6.8, humidity: 82.4 }
+    ];
+
+    // Convert data to GeoJSON format
+    const geojson = {
+        type: 'FeatureCollection',
+        features: sensorData.map(sensor => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: sensor.coordinates },
+            properties: { temperature: sensor.temperature, humidity: sensor.humidity }
+        }))
+    };
+
+    map.on('load', () => {
+        // Add GeoJSON source for sensor data
+        map.addSource('sensor-data', {
+            type: 'geojson',
+            data: geojson
+        });
+
+        // Add heatmap layer
+        map.addLayer({
+            id: 'temperature-heatmap',
+            type: 'heatmap',
+            source: 'sensor-data',
+            maxzoom: 15,
+            paint: {
+                'heatmap-weight': {
+                    property: 'temperature',
+                    type: 'exponential',
+                    stops: [[0, 0], [10, 1], [30, 2]]
+                },
+                'heatmap-intensity': { stops: [[11, 0.6], [15, 1.2]] },
+                'heatmap-color': [
+                    'interpolate',
+                    ['linear'],
+                    ['heatmap-density'],
+                    0, 'rgba(236,222,239,0)',
+                    0.2, 'rgb(208,209,230)',
+                    0.4, 'rgb(166,189,219)',
+                    0.6, 'rgb(103,169,207)',
+                    0.8, 'rgb(28,144,153)'
+                ],
+                'heatmap-radius': { stops: [[11, 15], [15, 25]] },
+                'heatmap-opacity': 0.5
+            }
+        });
+
+        // Add circle layer for points
+        map.addLayer({
+            id: 'sensor-points',
+            type: 'circle',
+            source: 'sensor-data',
+            minzoom: 14,
+            paint: {
+                'circle-radius': {
+                    property: 'temperature',
+                    type: 'exponential',
+                    stops: [[0, 5], [10, 10], [20, 15]]
+                },
+                'circle-color': [
+                    'interpolate',
+                    ['linear'],
+                    ['get', 'temperature'],
+                    0, '#e3f2fd',
+                    10, '#90caf9',
+                    20, '#42a5f5',
+                    30, '#1e88e5'
+                ],
+                'circle-stroke-color': 'white',
+                'circle-stroke-width': 1,
+                'circle-opacity': 0.8
+            }
+        });
+
+        // Add popup on point click
+        map.on('click', 'sensor-points', (event) => {
+            const { temperature, humidity } = event.features[0].properties;
+            new mapboxgl.Popup()
+                .setLngLat(event.features[0].geometry.coordinates)
+                .setHTML(`<strong>Temperature:</strong> ${temperature}°C<br><strong>Humidity:</strong> ${humidity}%`)
+                .addTo(map);
+        });
+    });
+</script>
+</body>
+</html>
